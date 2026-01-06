@@ -3,25 +3,25 @@ import pandas as pd
 import time
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Acesso Restrito", page_icon="🔒")
+# layout="centered" deixa o login bonitinho no meio da tela
+st.set_page_config(page_title="Acesso Restrito", page_icon="🔒", layout="centered")
 
-# --- BANCO DE DADOS SIMULADO (DataFrames) ---
+# --- BANCO DE DADOS (Corrigido e Unificado) ---
 
-# Tabela 1: Credenciais (Quem pode entrar)
+# Tabela 1: Credenciais
 dados_login = {
-    "email": ["joao@teste.com", "joaquim@teste.com", "chefe@teste.com"],
+    "email": ["joao@teste.com", "maria@teste.com", "chefe@teste.com"],
     "senha": ["12345", "abcde", "admin"]
 }
 df_credenciais = pd.DataFrame(dados_login)
 
-# Tabela 2: Destinos (Para onde cada um vai)
-# Note que aqui não tem senha, só o email para cruzar a informação
+# Tabela 2: Destinos
 dados_links = {
     "email": ["joao@teste.com", "maria@teste.com", "chefe@teste.com"],
     "link": [
-        "https://www.youtube.com/@DanielLopez",  # Link do João
-        "https://www.youtube.com/@Teatualizei",     # Link da Maria
-        "https://www.youtube.com/@SaladeGuerraSdG"          # Link do Chefe
+        "https://www.youtube.com/@DanielLopez",      # Link do João
+        "https://www.youtube.com/@Teatualizei",      # Link da Maria
+        "https://www.youtube.com/@SaladeGuerraSdG"   # Link do Chefe
     ]
 }
 df_destinos = pd.DataFrame(dados_links)
@@ -29,49 +29,65 @@ df_destinos = pd.DataFrame(dados_links)
 # --- FUNÇÕES ---
 
 def verificar_login(email, senha):
-    # Procura o usuário na Tabela 1
+    """Verifica se email e senha batem com o banco de dados"""
     usuario = df_credenciais[df_credenciais['email'] == email]
     
     if not usuario.empty:
-        # Se achou, verifica a senha
         senha_registrada = usuario.iloc[0]['senha']
-        if str(senha) == str(senha_registrada):
+        # Remove espaços em branco extras que podem causar erro
+        if str(senha).strip() == str(senha_registrada).strip():
             return True
     return False
 
 def pegar_link(email):
-    # Procura o link na Tabela 2
+    """Busca o link específico do usuário"""
     destino = df_destinos[df_destinos['email'] == email]
     if not destino.empty:
         return destino.iloc[0]['link']
-    return "https://www.google.com" # Link padrão de segurança
+    return "https://www.google.com" # Fallback de segurança
 
-def redirecionar(url):
-    # Truque em HTML/JS para redirecionar
-    html = f'<meta http-equiv="refresh" content="0; url={url}"><script>window.location.href = "{url}";</script>'
-    st.markdown(html, unsafe_allow_html=True)
+def redirecionar_js(url):
+    """
+    Injeta JavaScript para forçar a mudança de página.
+    Funciona melhor que st.switch_page para links externos.
+    """
+    js = f"""
+        <script>
+            window.top.location.href = "{url}";
+        </script>
+        <meta http-equiv="refresh" content="1;url={url}">
+    """
+    st.components.v1.html(js, height=0, width=0)
 
 # --- TELA (FRONT-END) ---
 
-st.title("🔒 Login de Redirecionamento")
+st.title("🔒 Portal de Acesso")
+st.markdown("Entre com suas credenciais para ser redirecionado.")
 
-with st.form("meu_form"):
-    email_digitado = st.text_input("E-mail")
+# Usar st.form evita que a página recarregue a cada letra digitada
+with st.form("form_login"):
+    email_digitado = st.text_input("E-mail", placeholder="seu@email.com")
     senha_digitada = st.text_input("Senha", type="password")
-    botao = st.form_submit_button("Entrar")
+    
+    # O botão de envio fica dentro do formulário
+    botao_entrar = st.form_submit_button("Acessar Sistema", use_container_width=True)
 
-if botao:
+# Lógica pós-clique
+if botao_entrar:
     if verificar_login(email_digitado, senha_digitada):
-        st.success("Login aprovado! Redirecionando...")
         
-        # Busca o link na segunda tabela
+        # 1. Busca o link
         link_final = pegar_link(email_digitado)
         
-        # Mostra link manual caso o automático falhe
-        st.write(f"Se não for automático, [clique aqui]({link_final})")
+        # 2. Feedback visual
+        st.success(f"Login aprovado! Redirecionando para: {link_final}")
         
-        # Espera um pouquinho e redireciona
-        time.sleep(1)
-        redirecionar(link_final)
+        # 3. Botão de emergência (caso o automático falhe no navegador do usuário)
+        st.link_button("👉 Clique aqui se não for redirecionado", link_final, type="primary")
+        
+        # 4. Aguarda e executa o redirecionamento automático
+        time.sleep(2) # Tempo para o usuário ler a mensagem
+        redirecionar_js(link_final)
+        
     else:
-        st.error("Usuário ou senha incorretos.")
+        st.error("🚫 Acesso negado! Verifique usuário e senha.")
